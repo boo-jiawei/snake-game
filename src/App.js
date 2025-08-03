@@ -1,3 +1,4 @@
+/*eslint-disable no-unused-vars*/
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Box, Flex, Button, Text, useBreakpointValue } from "@chakra-ui/react";
 import { GiAcorn } from "react-icons/gi";
@@ -20,6 +21,7 @@ const getRandomFoodPosition = (snake) => {
     };
   } while (
     snake.some(
+      // eslint-disable-next-line
       (snakePosition) =>
         snakePosition.x === foodPosition.x && snakePosition.y === foodPosition.y
     )
@@ -32,65 +34,64 @@ const App = () => {
   const [direction, setDirection] = useState(Initial_Direction);
   const [food, setFood] = useState(getRandomFoodPosition(Initial_Snake));
   const [isGameOver, setIsGameOver] = useState(false);
+  const [isStarted, setIsStarted] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [score, setScore] = useState(0);
   const [bonusFood, setBonusFood] = useState(null);
   const [foodCount, setFoodCount] = useState(0);
   const bonusFoodTimeout = useRef(null);
+  const boardRef = useRef(null);
 
   const cellSize = useBreakpointValue({ base: 8, md: 6 });
   const moveSnake = useCallback(() => {
-    if (isGameOver) return;
+    if (isGameOver || !isStarted || isPaused) return;
 
     const newHead = {
       x: snake[0].x + direction.x,
       y: snake[0].y + direction.y,
     };
 
-    //check collide with wall
-    if (
-      newHead.x < 0 || //wall
-      newHead.y < 0 || //wall
-      newHead.x >= Grid_Size || //wall
-      newHead.y >= Grid_Size ||
-      snake.some((s) => s.x === newHead.x && s.y === newHead.y) //wall
-    ) {
+    const hitWall =
+      newHead.x < 0 ||
+      newHead.y < 0 ||
+      newHead.x >= Grid_Size ||
+      newHead.y >= Grid_Size;
+
+    const hitSelf = snake.some((s) => s.x === newHead.x && s.y === newHead.y);
+
+    if (hitWall || hitSelf) {
       setIsGameOver(true);
       return;
     }
 
     const newSnake = [newHead, ...snake];
 
-    let ateNormalFood = false;
-    let ateBonusFood = false;
+    const ateNormalFood = newHead.x === food.x && newHead.y === food.y;
+    const ateBonusFood =
+      bonusFood && newHead.x === bonusFood.x && newHead.y === bonusFood.y;
 
     //eat food
-    if (newHead.x === food.x && newHead.y === food.y) {
-      ateNormalFood = true;
+
+    if (ateNormalFood) {
       setFood(getRandomFoodPosition(newSnake));
       setScore((prev) => prev + 1);
       setFoodCount((prev) => {
-        const newCount = prev + 1;
-        if (newCount % 5 === 0) {
-          const newBonus = getRandomFoodPosition(newSnake);
-          setBonusFood(newBonus);
+        const updated = prev + 1;
+        if (updated % 5 === 0) {
+          const bonus = getRandomFoodPosition(newSnake);
+          setBonusFood(bonus);
           if (bonusFoodTimeout.current) clearTimeout(bonusFoodTimeout.current);
-          bonusFoodTimeout.current = setTimeout(() => {
-            setBonusFood(null);
-          }, 6000);
+          bonusFoodTimeout.current = setTimeout(() => setBonusFood(null), 6000);
         }
-        return newCount;
+        return updated;
       });
-    } else if (
-      bonusFood &&
-      newHead.x === bonusFood.x &&
-      newHead.y === bonusFood.y
-    ) {
-      ateBonusFood = true;
+    } else if (ateBonusFood) {
       setBonusFood(null);
       setScore((prev) => prev + 5);
     } else {
       newSnake.pop();
     }
+
     setSnake(newSnake);
   }, [snake, direction, food, isGameOver, bonusFood]);
 
@@ -128,7 +129,47 @@ const App = () => {
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [direction, isGameOver]);
 
-  const handleRestart = () => {
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+
+    const handleTouchStart = (e) => {
+      if (boardRef.current?.contains(e.target)) {
+        e.preventDefault();
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      }
+    };
+    const handleTouchEnd = (e) => {
+      if (!boardRef.current?.contains(e.target)) return;
+
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+
+      const diffX = endX - startX;
+      const diffY = endY - startY;
+
+      if (Math.abs(diffX) > Math.abs(diffY)) {
+        if (diffX > 30 && direction.x === 0) setDirection({ x: 1, y: 0 });
+        else if (diffX < -30 && direction.x === 0)
+          setDirection({ x: -1, y: 0 });
+      } else {
+        if (diffY > 30 && direction.y === 0) setDirection({ x: 0, y: 1 });
+        else if (diffY < -30 && direction.y === 0)
+          setDirection({ x: 0, y: -1 });
+      }
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [direction]);
+
+  const handleStart = () => {
     setSnake(Initial_Snake);
     setDirection(Initial_Direction);
     setFood(getRandomFoodPosition(Initial_Snake));
@@ -137,6 +178,12 @@ const App = () => {
     if (bonusFoodTimeout.current) clearTimeout(bonusFoodTimeout.current);
     setIsGameOver(false);
     setScore(0);
+    setIsStarted(true);
+    setIsPaused(false);
+  };
+
+  const handlePause = () => {
+    setIsPaused((prev) => !prev);
   };
 
   return (
@@ -145,15 +192,28 @@ const App = () => {
         Snake Game
       </Text>
 
-      <Text fontSize="lg">score: {score}</Text>
+      <Flex justify="center" align="center" mt={4} mb={2} gap={4}>
+        {!isStarted || isGameOver ? (
+          <Button colorScheme="green" onClick={handleStart}>
+            Start Game
+          </Button>
+        ) : (
+          <Button onClick={handlePause}>{isPaused ? "Resume" : "Pause"}</Button>
+        )}
+        <Text fontSize="lg" mb={2}>
+          score: {score}
+        </Text>
+      </Flex>
 
       <Box
+        ref={boardRef}
         mt={4}
         border="2px solid gray"
         display="grid"
         gridTemplateColumns={`repeat(${Grid_Size},${cellSize}vmin)`}
         gridTemplateRows={`repeat(${Grid_Size},${cellSize}vmin)`}
         bg="gray.100"
+        touchAction="none"
       >
         {Array(Grid_Size * Grid_Size)
           .fill(null)
@@ -180,17 +240,6 @@ const App = () => {
             );
           })}
       </Box>
-
-      {isGameOver && (
-        <Box mt={4} textAlign="center">
-          <Text fontSize="xl" color="red.500" fontWeight="bold">
-            Game Over!
-          </Text>
-          <Button mt={2} colorScheme="teal" onClick={handleRestart}>
-            Restart
-          </Button>
-        </Box>
-      )}
     </Flex>
   );
 };
