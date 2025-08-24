@@ -1,27 +1,35 @@
-/*eslint-disable no-unused-vars*/
+/* eslint-disable no-unused-vars */
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Box, Flex, Button, Text, useBreakpointValue } from "@chakra-ui/react";
+import {
+  Box,
+  Flex,
+  Text,
+  Button,
+  Input,
+  useBreakpointValue,
+} from "@chakra-ui/react";
 import { GiAcorn } from "react-icons/gi";
 import { LuCherry } from "react-icons/lu";
+import ScoreBoard from "./components/ScoreBoard";
+import { addScore } from "./services/scoreService";
 
-const Grid_Size = 10;
-const Initial_Snake = [
+const GRID_SIZE = 10;
+const INITIAL_SNAKE = [
   { x: 2, y: 2 },
   { x: 2, y: 1 },
 ];
-
-const Initial_Direction = { x: 0, y: 1 };
+const INTIAL_DIRECTION = { x: 0, y: 1 };
 
 const getRandomFoodPosition = (snake) => {
   let foodPosition;
   do {
     foodPosition = {
-      x: Math.floor(Math.random() * Grid_Size),
-      y: Math.floor(Math.random() * Grid_Size),
+      x: Math.floor(Math.random() * GRID_SIZE),
+      y: Math.floor(Math.random() * GRID_SIZE),
     };
   } while (
     snake.some(
-      // eslint-disable-next-line
+      // eslint-disable-next-line no-loop-func
       (snakePosition) =>
         snakePosition.x === foodPosition.x && snakePosition.y === foodPosition.y
     )
@@ -30,19 +38,21 @@ const getRandomFoodPosition = (snake) => {
 };
 
 const App = () => {
-  const [snake, setSnake] = useState(Initial_Snake);
-  const [direction, setDirection] = useState(Initial_Direction);
-  const [food, setFood] = useState(getRandomFoodPosition(Initial_Snake));
+  const [snake, setSnake] = useState(INITIAL_SNAKE);
+  const [direction, setDirection] = useState(INTIAL_DIRECTION);
+  const [food, setFood] = useState(getRandomFoodPosition(INITIAL_SNAKE));
+  const [bonusFood, setBonusFood] = useState(null);
+  const [foodCount, setFoodCount] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isStarted, setIsStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [playerName, setPlayerName] = useState("");
   const [score, setScore] = useState(0);
-  const [bonusFood, setBonusFood] = useState(null);
-  const [foodCount, setFoodCount] = useState(0);
   const bonusFoodTimeout = useRef(null);
   const boardRef = useRef(null);
 
   const cellSize = useBreakpointValue({ base: 8, md: 6 });
+
   const moveSnake = useCallback(() => {
     if (isGameOver || !isStarted || isPaused) return;
 
@@ -54,13 +64,19 @@ const App = () => {
     const hitWall =
       newHead.x < 0 ||
       newHead.y < 0 ||
-      newHead.x >= Grid_Size ||
-      newHead.y >= Grid_Size;
+      newHead.x >= GRID_SIZE ||
+      newHead.y >= GRID_SIZE;
 
     const hitSelf = snake.some((s) => s.x === newHead.x && s.y === newHead.y);
 
     if (hitWall || hitSelf) {
       setIsGameOver(true);
+
+      if (playerName) {
+        addScore(playerName, score);
+      }
+
+      setIsStarted(false);
       return;
     }
 
@@ -69,8 +85,6 @@ const App = () => {
     const ateNormalFood = newHead.x === food.x && newHead.y === food.y;
     const ateBonusFood =
       bonusFood && newHead.x === bonusFood.x && newHead.y === bonusFood.y;
-
-    //eat food
 
     if (ateNormalFood) {
       setFood(getRandomFoodPosition(newSnake));
@@ -93,13 +107,24 @@ const App = () => {
     }
 
     setSnake(newSnake);
-  }, [snake, direction, food, isGameOver, bonusFood]);
+  }, [
+    isGameOver,
+    isStarted,
+    isPaused,
+    snake,
+    direction,
+    food,
+    bonusFood,
+    playerName,
+    score,
+  ]);
 
   useEffect(() => {
     const interval = setInterval(moveSnake, 200);
     return () => clearInterval(interval);
   }, [moveSnake]);
 
+  // keyboard controls
   useEffect(() => {
     const handleKeyPress = (e) => {
       if (isGameOver) return;
@@ -129,6 +154,7 @@ const App = () => {
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [direction, isGameOver]);
 
+  // swipe controls
   useEffect(() => {
     let startX = 0;
     let startY = 0;
@@ -140,6 +166,7 @@ const App = () => {
         startY = e.touches[0].clientY;
       }
     };
+
     const handleTouchEnd = (e) => {
       if (!boardRef.current?.contains(e.target)) return;
 
@@ -170,9 +197,13 @@ const App = () => {
   }, [direction]);
 
   const handleStart = () => {
-    setSnake(Initial_Snake);
-    setDirection(Initial_Direction);
-    setFood(getRandomFoodPosition(Initial_Snake));
+    if (!playerName.trim()) {
+      alert("Please enter your name!");
+      return;
+    }
+    setSnake(INITIAL_SNAKE);
+    setDirection(INTIAL_DIRECTION);
+    setFood(getRandomFoodPosition(INITIAL_SNAKE));
     setBonusFood(null);
     setFoodCount(0);
     if (bonusFoodTimeout.current) clearTimeout(bonusFoodTimeout.current);
@@ -187,58 +218,99 @@ const App = () => {
   };
 
   return (
-    <Flex align="center" direction="column" mt={4}>
-      <Text fontSize="2xl" fontWeight="bold" mb={2}>
-        Snake Game
-      </Text>
-
-      <Flex justify="center" align="center" mt={4} mb={2} gap={4}>
-        {!isStarted || isGameOver ? (
-          <Button colorScheme="green" onClick={handleStart}>
-            Start Game
-          </Button>
-        ) : (
-          <Button onClick={handlePause}>{isPaused ? "Resume" : "Pause"}</Button>
-        )}
-        <Text fontSize="lg" mb={2}>
-          score: {score}
-        </Text>
-      </Flex>
-
+    <Flex
+      direction={{ base: "column", md: "row" }}
+      justify="center"
+      align="center"
+      w="100%"
+      p={4}
+      gap={6}
+    >
       <Box
-        ref={boardRef}
-        mt={4}
+        flex="1"
+        maxW={{ base: "100%", md: "480px" }}
         border="2px solid gray"
-        display="grid"
-        gridTemplateColumns={`repeat(${Grid_Size},${cellSize}vmin)`}
-        gridTemplateRows={`repeat(${Grid_Size},${cellSize}vmin)`}
-        bg="gray.100"
-        touchAction="none"
+        borderRadius="md"
+        p={4}
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="flex-start"
       >
-        {Array(Grid_Size * Grid_Size)
-          .fill(null)
-          .map((_, idx) => {
-            const x = idx % Grid_Size;
-            const y = Math.floor(idx / Grid_Size);
+        <Text fontSize="2xl" fontWeight="bold" mb={2}>
+          Snake Game
+        </Text>
 
-            const isHead = snake.length && snake[0].x === x && snake[0].y === y;
-            const isSnake = snake.some((s) => s.x === x && s.y === y);
-            const isFood = food.x === x && food.y === y;
-            const isBonusFood =
-              bonusFood && bonusFood.x === x && bonusFood.y === y;
-            return (
-              <Box
-                key={idx}
-                bg={isHead ? "green.700" : isSnake ? "green.500" : "white"}
-                border="1px solid"
-                borderRadius={isHead ? "10px" : isSnake ? "15px" : 0}
-                borderColor="gray.300"
-              >
-                {isFood && <GiAcorn color="brown" size="80%" />}
-                {isBonusFood && <LuCherry color="red" size="80%" />}
-              </Box>
-            );
-          })}
+        <Flex justify="center" align="center" mt={4} mb={2} gap={4}>
+          {!isStarted || isGameOver ? (
+            <>
+              <Input
+                placeholder="Enter your name"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                maxW="200px"
+              />
+              <Button colorScheme="green" onClick={handleStart}>
+                Start Game
+              </Button>
+            </>
+          ) : (
+            <Button onClick={handlePause}>
+              {isPaused ? "Resume" : "Pause"}
+            </Button>
+          )}
+          <Text fontSize="lg">Score: {score}</Text>
+        </Flex>
+
+        <Box
+          ref={boardRef}
+          mt={4}
+          border="2px solid gray"
+          display="grid"
+          gridTemplateColumns={`repeat(${GRID_SIZE}, ${cellSize}vmin)`}
+          gridTemplateRows={`repeat(${GRID_SIZE}, ${cellSize}vmin)`}
+          bg="gray.100"
+          touchAction="none"
+        >
+          {Array(GRID_SIZE * GRID_SIZE)
+            .fill(null)
+            .map((_, idx) => {
+              const x = idx % GRID_SIZE;
+              const y = Math.floor(idx / GRID_SIZE);
+
+              const isHead =
+                snake.length && snake[0].x === x && snake[0].y === y;
+              const isSnake = snake.some((s) => s.x === x && s.y === y);
+              const isFood = food.x === x && food.y === y;
+              const isBonusFood =
+                bonusFood && bonusFood.x === x && bonusFood.y === y;
+
+              return (
+                <Box
+                  key={idx}
+                  bg={isHead ? "green.700" : isSnake ? "green.500" : "white"}
+                  border="1px solid"
+                  borderRadius={isHead ? "15px" : isSnake ? "10px" : 0}
+                  borderColor="gray.300"
+                >
+                  {isFood && <GiAcorn color="brown" size="80%" />}
+                  {isBonusFood && <LuCherry color="red" size="80%" />}
+                </Box>
+              );
+            })}
+        </Box>
+      </Box>
+      <Box
+        Flex="1"
+        maxW={{ base: "100%", md: "400px" }}
+        border="2px solid gray"
+        borderRadius="md"
+        p={4}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+      >
+        <ScoreBoard />
       </Box>
     </Flex>
   );
