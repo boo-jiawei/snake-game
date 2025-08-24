@@ -18,6 +18,7 @@ const ScoreBoard = () => {
       borderRadius="md"
       maxW="400px"
       mx="auto"
+      bg="green.100"
     >
       <Heading size="md" mb={3} textAlign="center">
         Top 5 Scores

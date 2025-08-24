@@ -227,6 +227,7 @@ const App = () => {
       gap={6}
     >
       <Box
+        bg="green.200"
         flex="1"
         maxW={{ base: "100%", md: "480px" }}
         border="2px solid gray"
@@ -245,6 +246,7 @@ const App = () => {
           {!isStarted || isGameOver ? (
             <>
               <Input
+                bg="white"
                 placeholder="Enter your name"
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
@@ -255,7 +257,7 @@ const App = () => {
               </Button>
             </>
           ) : (
-            <Button onClick={handlePause}>
+            <Button onClick={handlePause} colorScheme="green">
               {isPaused ? "Resume" : "Pause"}
             </Button>
           )}
@@ -288,11 +290,18 @@ const App = () => {
               return (
                 <Box
                   key={idx}
+                  w={`${cellSize}vmin`}
+                  h={`${cellSize}vmin`}
                   bg={isHead ? "green.700" : isSnake ? "green.500" : "white"}
                   border="1px solid"
-                  borderRadius={isHead ? "15px" : isSnake ? "10px" : 0}
                   borderColor="gray.300"
+                  borderRadius={isHead ? "15px" : isSnake ? "10px" : "4px"}
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  fontSize="lg"
                 >
+                  {isHead && "● ●"}
                   {isFood && <GiAcorn color="brown" size="80%" />}
                   {isBonusFood && <LuCherry color="red" size="80%" />}
                 </Box>
@@ -300,7 +309,9 @@ const App = () => {
             })}
         </Box>
       </Box>
+
       <Box
+      bg="green.300"
         Flex="1"
         maxW={{ base: "100%", md: "400px" }}
         border="2px solid gray"
